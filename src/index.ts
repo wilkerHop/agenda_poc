@@ -3,20 +3,19 @@ import { MongoClient } from "mongodb";
 import axios from "axios";
 const { mongoConnectionString } = process.env;
 
-const getDb = async function () {
-  const { db } = await new MongoClient(mongoConnectionString!, {
-    useUnifiedTopology: true,
-  }).connect();
+const client = new MongoClient(mongoConnectionString!, {
+  useUnifiedTopology: true,
+});
+client.connect();
 
-  return db("agenda_poc");
-};
+const getCollection = () => client.db("agenda_poc").collection("gibberishData");
 
 const getGibberish = async () => {
   const { data } = await axios(
     "https://www.randomtext.me/api/gibberish/h1/20-35"
   );
 
-  return data.text_out.replace(/<h1>(.*)<\/h1>/gi, "$1") as string;
+  return (data.text_out as string).replace(/<h1>(.*)<\/h1>/gi, "$1");
 };
 
 const agenda = new Agenda({
@@ -28,17 +27,21 @@ const agenda = new Agenda({
   },
 });
 
-agenda.define("add gibberish", async function (job) {
+agenda.define<{ gibberish: string }>("add gibberish", async function (job) {
   const gibberish = await getGibberish();
 
-  // const db = await getDb().catch((err) => {
-  //   console.error(err);
-  //   throw err;
-  // });
+  job.attrs.data = { gibberish };
 
-  // await db.collection("gibberishData").insertOne({ gibberish });
+  await job.save();
 
-  console.log("Gibberish added", gibberish);
+  await getCollection()
+    .insertOne({ gibberish })
+    .catch((err) => {
+      console.error(err);
+      throw err;
+    });
+
+  console.log("Gibberish added", `'${gibberish}'`);
 });
 
 (async function () {

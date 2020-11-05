@@ -3,12 +3,15 @@ import { MongoClient } from "mongodb";
 import axios from "axios";
 const { mongoConnectionString } = process.env;
 
-const client = new MongoClient(mongoConnectionString!, {
+const mongoClient = new MongoClient(mongoConnectionString!, {
   useUnifiedTopology: true,
 });
-client.connect();
 
-const getCollection = () => client.db("agenda_poc").collection("gibberishData");
+const agenda = new Agenda();
+mongoClient.connect().then((db) => agenda.mongo(db.db("agenda_poc")));
+
+const getCollection = () =>
+  mongoClient.db("agenda_poc").collection("gibberishData");
 
 const getGibberish = async () => {
   const { data } = await axios(
@@ -17,15 +20,6 @@ const getGibberish = async () => {
 
   return (data.text_out as string).replace(/<h1>(.*)<\/h1>/gi, "$1");
 };
-
-const agenda = new Agenda({
-  db: {
-    address: mongoConnectionString,
-    options: {
-      useUnifiedTopology: true,
-    },
-  },
-});
 
 agenda.define<{ gibberish: string }>("add gibberish", async function (job) {
   const gibberish = await getGibberish();
@@ -44,7 +38,7 @@ agenda.define<{ gibberish: string }>("add gibberish", async function (job) {
   console.log("Gibberish added", `'${gibberish}'`);
 });
 
-(async function () {
+(async () => {
   await agenda.start();
   console.info("agenda started");
 
